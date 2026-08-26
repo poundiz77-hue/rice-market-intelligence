@@ -34,7 +34,7 @@ try:
         contents=super_macro_prompt
     )
 
-    # 4. Step 2: 9-Grade Precision Inventory Strategy (gemini-3.6-flash)
+    # 4. Step 2: 9-Grade Precision Inventory Strategy
     grade_prompt = """
     ประเมินและวิเคราะห์กลยุทธ์สินค้าคงคลังและราคาสำหรับข้าว 9 เกรดหลักของไทย:
     1. ข้าวหอมมะลิ (105/กข15)
@@ -65,27 +65,39 @@ try:
         contents=grade_prompt
     )
 
-    # 5. Clean Garbage Cells & Update Sheets
-    sheet.batch_clear(['A12:E12', 'A15:E18'])
+    # 5. Clean Garbage Cells
+    sheet.batch_clear(['A12:E12', 'A14:E18'])
     
     # อัปเดต Macro Narrative ลง A8
     sheet.update('A8', [[macro_response.text]])
 
-    # แปลงผลลัพธ์ JSON และอัปเดตลงตาราง A22:E30
+    # แปลงผลลัพธ์ JSON
     clean_json = grid_response.text.strip().replace('```json', '').replace('```', '')
     data_items = json.loads(clean_json)
     
     table_rows = []
+    must_stock_items = []
+
     for item in data_items:
-        table_rows.append([
-            item.get("grade_name", ""),
-            item.get("market_status", ""),
-            item.get("fob_forecast", ""),
-            item.get("strategy_action", ""),
-            item.get("target_markets", "")
-        ])
-    
+        grade = item.get("grade_name", "")
+        status = item.get("market_status", "")
+        forecast = item.get("fob_forecast", "")
+        action = item.get("strategy_action", "")
+        target = item.get("target_markets", "")
+
+        table_rows.append([grade, status, forecast, action, target])
+
+        # ถ้าเป็นตัวที่น่ากักตุน (MUST STOCK) ให้เก็บไว้เอาไปโชว์โซนบน (บรรทัด 14 เป็นต้นไป)
+        if "MUST STOCK" in action:
+            must_stock_items.append([grade, status, action])
+
+    # อัปเดตตารางหลัก 9 เกรด (A22:E30)
     sheet.update('A22:E30', table_rows)
+
+    # หยอดตัว MUST STOCK เข้าไปในโซนบน (เริ่มบรรทัด 14) อัตโนมัติ
+    if must_stock_items:
+        sheet.update(f'A14:C{13 + len(must_stock_items)}', must_stock_items)
+
     print("✅ Super Data Analysis Completed & Sheet Updated Successfully!")
 
 except Exception as e:
