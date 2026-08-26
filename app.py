@@ -39,9 +39,9 @@ super_macro_prompt = f"""
 เน้นข้อมูลเชิงตัวเลข ทิศทางราคา และบทสรุปที่เฉียบคม นำไปใช้ตัดสินใจเชิงกลยุทธ์ได้ทันที
 """
 
-print("Executing Real-Time Super Macro Analysis via Gemini Pro...")
+print("Executing Real-Time Super Macro Analysis via Gemini 3.6 Flash...")
 macro_response = ai_client.models.generate_content(
-    model='gemini-2.5-pro',
+    model='gemini-3.6-flash',
     contents=super_macro_prompt,
     config=types.GenerateContentConfig(
         tools=[{"google_search": {}}],
@@ -87,7 +87,7 @@ json_schema = {
     }
 }
 
-print("Executing 9-Grade Precision Forecasting...")
+print("Executing 9-Grade Precision Forecasting via Gemini 3.6 Flash...")
 grid_response = ai_client.models.generate_content(
     model='gemini-3.6-flash',
     contents=grade_prompt,
