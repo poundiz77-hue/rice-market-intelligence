@@ -1,4 +1,5 @@
 import os
+import datetime
 import json
 import traceback
 import gspread
@@ -18,15 +19,22 @@ try:
     ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     # 3. Step 1: Real-time Super Macro Analysis (gemini-3.6-flash)
-    super_macro_prompt = """
-    คุณคือ Chief Agricultural Economist & Strategic Supply Chain Director ประจำอุตสาหกรรมข้าวไทย
-    จงประมวลผลและวิเคราะห์แนวโน้มตลาดข้าว เพื่อเขียนบทวิเคราะห์ระดับผู้บริหาร ความยาว 4-5 บรรทัด โดยครอบคลุม:
-    1. Global Macro: ค่าเงิน THB/USD, ค่าขนส่ง/เรือ, ราคาน้ำมัน, สถานการณ์สงคราม/การเมืองโลก และนโยบายส่งออกของอินเดีย/เวียดนาม
-    2. Domestic Inventory & Seasonality: ปริมาณผลผลิตข้าวเปลือกเข้าโรงสีในไทย, สภาพอากาศ, ต้นทุนการถือครองคลัง (Holding Cost)
-    3. Must-Stock Target: ระบุชัดเจนว่าข้าวเกรดใดในไทยที่ "น่ากักตุนมากที่สุด (Top Must-Stock Pick)" เพราะเหตุใด
+import datetime
 
-    เน้นข้อมูลเชิงตัวเลข ทิศทางราคา และบทสรุปที่เฉียบคม นำไปใช้ตัดสินใจเชิงกลยุทธ์ได้ทันที
-    """
+current_year = datetime.datetime.now().year
+next_year = current_year + 1
+
+super_macro_prompt = f"""
+คุณคือ Chief Agricultural Economist & Strategic Supply Chain Director ประจำอุตสาหกรรมข้าวไทย
+*คำเตือนสำคัญที่สุด: ปัจจุบันคือปี {current_year} (และมองข้ามไปถึงปี {next_year}) ห้ามอ้างอิงปี ค.ศ. ในอดีตเด็ดขาด*
+จงค้นหาและประมวลผลข้อมูลตลาดข้าว ณ ปัจจุบัน (ปี {current_year}) เพื่อเขียนบทวิเคราะห์ระดับผู้บริหาร ความยาว 4-5 บรรทัด โดยครอบคลุม:
+
+1. Global Macro: ค่าเงิน THB/USD, ค่าขนส่ง/เรือ (Freight), ราคาน้ำมัน, สถานการณ์สงคราม/การเมืองโลก และนโยบายส่งออกของอินเดีย/เวียดนาม ในปี {current_year}
+2. Domestic Inventory & Seasonality: ปริมาณผลผลิตข้าวเปลือกเข้าโรงสีในไทย, สภาพอากาศ, ต้นทุนการถือครองคลัง (Holding Cost) 
+3. Must-Stock Target: ระบุชัดเจนว่าข้าวเกรดใดในไทยที่ "น่ากักตุนมากที่สุด (Top Must-Stock Pick)" ในปี {current_year} เพราะเหตุใด
+
+เน้นข้อมูลเชิงตัวเลข ทิศทางราคา และบทสรุปที่เฉียบคม นำไปใช้ตัดสินใจเชิงกลยุทธ์ได้ทันที
+"""
 
     print("Executing Super Macro Analysis with gemini-3.6-flash...")
     macro_response = ai_client.models.generate_content(
