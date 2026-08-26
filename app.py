@@ -36,7 +36,7 @@ super_macro_prompt = """
 
 print("Executing Super Macro Analysis via Gemini Pro...")
 macro_response = ai_client.models.generate_content(
-    model='gemini-2.5-pro',
+    model='gemini-3.1-pro',
     contents=super_macro_prompt,
     config=types.GenerateContentConfig(
         temperature=0.1
@@ -74,45 +74,23 @@ json_schema = {
             "grade_name": {"type": "STRING"},
             "market_status": {"type": "STRING"},
             "fob_forecast": {"type": "STRING"},
-            "strategy_action": {"type": "STRING"},
             "target_markets": {"type": "STRING"}
-        },
-        "required": ["grade_name", "market_status", "fob_forecast", "strategy_action", "target_markets"]
-    }
-}
-
-print("Executing 9-Grade Precision Forecasting...")
+        },    }
 grid_response = ai_client.models.generate_content(
-    model='gemini-2.5-pro',
     contents=grade_prompt,
-    config=types.GenerateContentConfig(
-        response_mime_type="application/json",
-        response_schema=json_schema,
+    config=types.GenerateContentConfig(        response_schema=json_schema,
         temperature=0.1
-    )
-)
-
-# ---------------------------------------------------------
+    )# ---------------------------------------------------------
 # 5. Step 3: Clean & Precise Google Sheets Output Mapping
 # ---------------------------------------------------------
-sheet.batch_clear(['A12:E12', 'A15:E18'])
-
 # 1. เขียนบทวิเคราะห์ Super Macro สรุปลงช่อง A8
-sheet.update('A8', [[macro_response.text]])
-
-# 2. แปลง JSON อัปเดตตารางแนะนำหลักช่วง A22:E30
+sheet.update('A8', [[macro_response.text]])# 2. แปลง JSON อัปเดตตารางแนะนำหลักช่วง A22:E30
 try:
-    data_items = json.loads(grid_response.text)
-    table_rows = []
-    for item in data_items:
+    data_items = json.loads(grid_response.text    for item in data_items:
         table_rows.append([
-            item["grade_name"],
-            item["market_status"],
-            item["fob_forecast"],
+            item["grade_name"],            item["fob_forecast"],
             item["strategy_action"],
-            item["target_markets"]
-        ])
-    
+            item["target_markets"]    
     sheet.update('A22:E30', table_rows)
     print("✅ Super Data Analysis Completed & Sheet Updated Successfully!")
 
