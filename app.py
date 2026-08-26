@@ -1,26 +1,29 @@
 import os
 import datetime
 import json
-import traceback
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from google import genai
+from google.genai import types
 
-try:
-    # 1. Google Sheets Authorization & Setup
-    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-    creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
-    client = gspread.authorize(creds)
+# ---------------------------------------------------------
+# 1. Google Sheets Authorization & Setup
+# ---------------------------------------------------------
+scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
+client = gspread.authorize(creds)
 
-    spreadsheet_id = os.environ.get("SPREADSHEET_ID")
-    sheet = client.open_by_key(spreadsheet_id).worksheet("Dashboard")
+spreadsheet_id = os.environ.get("SPREADSHEET_ID")
+sheet = client.open_by_key(spreadsheet_id).worksheet("Dashboard")
 
-    # 2. Gemini Client Setup
-    ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+# ---------------------------------------------------------
+# 2. Gemini Client Initialization
+# ---------------------------------------------------------
+ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
-    # 3. Step 1: Real-time Super Macro Analysis (gemini-3.6-flash)
-import datetime
-
+# ---------------------------------------------------------
+# 3. Step 1: Real-time Super Macro & Domestic Stock Analysis
+# ---------------------------------------------------------
 current_year = datetime.datetime.now().year
 next_year = current_year + 1
 
@@ -36,79 +39,88 @@ super_macro_prompt = f"""
 เน้นข้อมูลเชิงตัวเลข ทิศทางราคา และบทสรุปที่เฉียบคม นำไปใช้ตัดสินใจเชิงกลยุทธ์ได้ทันที
 """
 
-    print("Executing Super Macro Analysis with gemini-3.6-flash...")
-    macro_response = ai_client.models.generate_content(
-        model='gemini-3.6-flash',
-        contents=super_macro_prompt
+print("Executing Real-Time Super Macro Analysis via Gemini Pro...")
+macro_response = ai_client.models.generate_content(
+    model='gemini-2.5-pro',
+    contents=super_macro_prompt,
+    config=types.GenerateContentConfig(
+        tools=[{"google_search": {}}],
+        temperature=0.1
     )
+)
 
-    # 4. Step 2: 9-Grade Precision Inventory Strategy
-    grade_prompt = """
-    ประเมินและวิเคราะห์กลยุทธ์สินค้าคงคลังและราคาสำหรับข้าว 9 เกรดหลักของไทย:
-    1. ข้าวหอมมะลิ (105/กข15)
-    2. ข้าวออร์แกนิก (Organic - EU/US)
-    3. ข้าวปทุมธานี
-    4. ข้าวขาว 5%
-    5. ข้าวหอม (เก่า) [Premium Margin]
-    6. ข้าวเหนียว
-    7. ปลายหอม (ใหม่)
-    8. ปลายหอมเก่า (ตลาดแปรรูป)
-    9. ปลายปลาทู (A1 Extra)
+# ---------------------------------------------------------
+# 4. Step 2: 9-Grade Precision Inventory Strategy
+# ---------------------------------------------------------
+grade_prompt = """
+ประเมินและวิเคราะห์กลยุทธ์สินค้าคงคลังและราคาสำหรับข้าว 9 เกรดหลักของไทย:
+1. ข้าวหอมมะลิ (105/กข15)
+2. ข้าวออร์แกนิก (Organic - EU/US)
+3. ข้าวปทุมธานี
+4. ข้าวขาว 5%
+5. ข้าวหอม (เก่า) [Premium Margin]
+6. ข้าวเหนียว
+7. ปลายหอม (ใหม่)
+8. ปลายหอมเก่า (ตลาดแปรรูป)
+9. ปลายปลาทู (A1 Extra)
 
-    ตอบกลับเป็น JSON array เท่านั้น ห้ามใส่ markdown หรือข้อความอื่น:
-    [
-      {
-        "grade_name": "ชื่อเกรด",
-        "market_status": "Tight / Balanced / Surplus",
-        "fob_forecast": "ราคา FOB (USD/MT)",
-        "strategy_action": "⭐ MUST STOCK หรือ Hold / ดันราคา หรือ ขายตามรอบ หรือ เร่งระบาย",
-        "target_markets": "ตลาดเป้าหมาย"
-      }
-    ]
-    """
+ตอบเป็น JSON Array เท่านั้น โดยแต่ละรายการต้องประกอบด้วย:
+- grade_name: ชื่อเกรดสินค้าตามรายการข้างต้น
+- market_status: "Tight" หรือ "Balanced" หรือ "Surplus"
+- fob_forecast: ราคาคาดการณ์ FOB (USD/MT) เช่น "920-940 USD/MT"
+- strategy_action: "⭐ MUST STOCK", "Hold / ดันราคา", "ขายตามรอบ", หรือ "เร่งระบาย"
+- target_markets: ตลาดเป้าหมายหลัก
+"""
 
-    print("Executing 9-Grade Inventory Forecasting with gemini-3.6-flash...")
-    grid_response = ai_client.models.generate_content(
-        model='gemini-3.6-flash',
-        contents=grade_prompt
+json_schema = {
+    "type": "ARRAY",
+    "items": {
+        "type": "OBJECT",
+        "properties": {
+            "grade_name": {"type": "STRING"},
+            "market_status": {"type": "STRING"},
+            "fob_forecast": {"type": "STRING"},
+            "strategy_action": {"type": "STRING"},
+            "target_markets": {"type": "STRING"}
+        },
+        "required": ["grade_name", "market_status", "fob_forecast", "strategy_action", "target_markets"]
+    }
+}
+
+print("Executing 9-Grade Precision Forecasting...")
+grid_response = ai_client.models.generate_content(
+    model='gemini-2.5-pro',
+    contents=grade_prompt,
+    config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        response_schema=json_schema,
+        temperature=0.1
     )
+)
 
-    # 5. Clean Garbage Cells
-    sheet.batch_clear(['A12:E12', 'A14:E18'])
-    
-    # อัปเดต Macro Narrative ลง A8
-    sheet.update('A8', [[macro_response.text]])
+# ---------------------------------------------------------
+# 5. Step 3: Clean & Precise Google Sheets Output Mapping
+# ---------------------------------------------------------
+sheet.batch_clear(['A12:E12', 'A15:E18'])
 
-    # แปลงผลลัพธ์ JSON
-    clean_json = grid_response.text.strip().replace('```json', '').replace('```', '')
-    data_items = json.loads(clean_json)
-    
+# 1. เขียนบทวิเคราะห์ Super Macro ลงช่อง A8
+sheet.update('A8', [[macro_response.text]])
+
+# 2. แปลง JSON อัปเดตตารางแนะนำช่วง A22:E30
+try:
+    data_items = json.loads(grid_response.text)
     table_rows = []
-    must_stock_items = []
-
     for item in data_items:
-        grade = item.get("grade_name", "")
-        status = item.get("market_status", "")
-        forecast = item.get("fob_forecast", "")
-        action = item.get("strategy_action", "")
-        target = item.get("target_markets", "")
-
-        table_rows.append([grade, status, forecast, action, target])
-
-        # ถ้าเป็นตัวที่น่ากักตุน (MUST STOCK) ให้เก็บไว้เอาไปโชว์โซนบน (บรรทัด 14 เป็นต้นไป)
-        if "MUST STOCK" in action:
-            must_stock_items.append([grade, status, action])
-
-    # อัปเดตตารางหลัก 9 เกรด (A22:E30)
+        table_rows.append([
+            item["grade_name"],
+            item["market_status"],
+            item["fob_forecast"],
+            item["strategy_action"],
+            item["target_markets"]
+        ])
+    
     sheet.update('A22:E30', table_rows)
-
-    # หยอดตัว MUST STOCK เข้าไปในโซนบน (เริ่มบรรทัด 14) อัตโนมัติ
-    if must_stock_items:
-        sheet.update(f'A14:C{13 + len(must_stock_items)}', must_stock_items)
-
     print("✅ Super Data Analysis Completed & Sheet Updated Successfully!")
 
 except Exception as e:
-    print(f"❌ Execution Failure Details:")
-    traceback.print_exc()
-    raise e
+    print(f"❌ Execution Error: {e}")
