@@ -16,7 +16,7 @@ spreadsheet_id = os.environ.get("SPREADSHEET_ID")
 sheet = client.open_by_key(spreadsheet_id).worksheet("Dashboard")
 
 # ---------------------------------------------------------
-# 2. Gemini 2.5 Pro Client Initialization
+# 2. Gemini Client Initialization
 # ---------------------------------------------------------
 ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
@@ -25,7 +25,7 @@ ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 # ---------------------------------------------------------
 super_macro_prompt = """
 คุณคือ Chief Agricultural Economist & Strategic Supply Chain Director ประจำอุตสาหกรรมข้าวไทย
-จงค้นหาและประมวลผลข้อมูลตลาดข้าว ณ ปัจจุบัน เพื่อเขียนบทวิเคราะห์ระดับผู้บริหาร ความยาว 4-5 บรรทัด โดยครอบคลุม:
+จงประมวลผลและวิเคราะห์แนวโน้มตลาดข้าว เพื่อเขียนบทวิเคราะห์ระดับผู้บริหาร ความยาว 4-5 บรรทัด โดยครอบคลุม:
 
 1. Global Macro: ค่าเงิน THB/USD, ค่าขนส่ง/เรือ (Freight), ราคาน้ำมัน, สถานการณ์สงคราม/การเมืองโลก และนโยบายส่งออกของอินเดีย/เวียดนาม
 2. Domestic Inventory & Seasonality: ปริมาณผลผลิตข้าวเปลือกเข้าโรงสีในไทย, สภาพอากาศ, ต้นทุนการถือครองคลัง (Holding Cost)
@@ -34,12 +34,11 @@ super_macro_prompt = """
 เน้นข้อมูลเชิงตัวเลข ทิศทางราคา และบทสรุปที่เฉียบคม นำไปใช้ตัดสินใจเชิงกลยุทธ์ได้ทันที
 """
 
-print("Executing Real-Time Super Macro Analysis via Gemini 2.5 Pro...")
+print("Executing Super Macro Analysis via Gemini Pro...")
 macro_response = ai_client.models.generate_content(
     model='gemini-2.5-pro',
     contents=super_macro_prompt,
     config=types.GenerateContentConfig(
-        tools=[{"google_search": {}}], # ดึงข้อมูล Real-time จริงจาก Google Search
         temperature=0.1
     )
 )
@@ -96,13 +95,12 @@ grid_response = ai_client.models.generate_content(
 # ---------------------------------------------------------
 # 5. Step 3: Clean & Precise Google Sheets Output Mapping
 # ---------------------------------------------------------
-# ล้างเซลล์ขยะเดิม (A12 ที่เคยหลุด และช่วงบรรทัด 15-18)
 sheet.batch_clear(['A12:E12', 'A15:E18'])
 
 # 1. เขียนบทวิเคราะห์ Super Macro สรุปลงช่อง A8
 sheet.update('A8', [[macro_response.text]])
 
-# 2. แปลง JSON อัปเดตตารางแนะนำหลักช่วง A22:E30 อย่างแม่นยำ
+# 2. แปลง JSON อัปเดตตารางแนะนำหลักช่วง A22:E30
 try:
     data_items = json.loads(grid_response.text)
     table_rows = []
