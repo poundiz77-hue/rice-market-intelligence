@@ -89,7 +89,7 @@ json_schema = {
 
 print("Executing 9-Grade Precision Forecasting...")
 grid_response = ai_client.models.generate_content(
-    model='gemini-3.1-pro',
+    model='gemini-3.6-flash',
     contents=grade_prompt,
     config=types.GenerateContentConfig(
         response_mime_type="application/json",
