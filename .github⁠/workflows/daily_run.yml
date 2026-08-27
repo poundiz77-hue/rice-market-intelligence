@@ -26,7 +26,7 @@ jobs:
           uv sync
 
       - name: Create credentials.json for Google Sheets & AppSheet API
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+        run: echo '${{ secrets.GCP_SA_KEY }}' > credentials.json
 
       - name: Run Rice Intelligence Engine
         env:
