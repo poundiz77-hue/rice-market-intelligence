@@ -22,6 +22,7 @@ jobs:
         run: |
          pip install google-genai gspread oauth2client requests beautifulsoup4
 
+
       - name: Run Rice Intelligence Engine
         run: python app.py
 
