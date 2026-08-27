@@ -1,8 +1,8 @@
-name: Rice Intelligence Daily Automated Run
+name: Rice Intelligence & Inventory Daily Automated Run
 
 on:
   schedule:
-    # รันอัตโนมัติทุกวัน เวลา 08:00 น. (เวลาไทย)
+    # รันอัตโนมัติทุกวัน เวลา 08:00 น. เวลาไทย (01:00 UTC)
     - cron: '0 1 * * *'
   workflow_dispatch:
 
@@ -11,19 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-- name: Install dependencies
-  run: |
-    uv add requests beautifulsoup4
-    uv pip install google-genai gspread oauth2client
+      - name: Install uv environment
+        uses: astral-sh/setup-uv@v5
 
+      - name: Sync dependencies & Lockfile
+        run: |
+          uv sync
+
+      - name: Create credentials.json for Google Sheets & AppSheet API
+        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
 
       - name: Run Rice Intelligence Engine
-        run: python app.py
-
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          uv run python app.py
