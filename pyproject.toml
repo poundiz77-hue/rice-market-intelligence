@@ -5,9 +5,11 @@ description = "A simple Streamlit app template."
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "beautifulsoup4>=4.15.0",
-    "requests>=2.34.0",
-    "streamlit>=1.61.1",
+    "google-genai",
+    "gspread",
+    "oauth2client",
+    "requests",
+    "beautifulsoup4",
 ]
 
 [tool.uv]
