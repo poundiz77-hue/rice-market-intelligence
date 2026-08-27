@@ -20,8 +20,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install google-genai gspread oauth2client pandas
+          uv pip install -r pyproject.toml requests beautifulsoup4
 
       - name: Run Rice Intelligence Engine
         run: python app.py
