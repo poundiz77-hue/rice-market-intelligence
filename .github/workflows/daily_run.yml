@@ -24,8 +24,20 @@ jobs:
         run: |
           uv sync
 
-      - name: Create credentials.json for Google Sheets & AppSheet API
-        run: echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > credentials.json
+      - name: Create credentials.json from Secret
+        run: echo "$GCP_SA_KEY" > credentials.json
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Debug - confirm which Gemini key is loaded
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          echo "Key length (characters):"
+          echo -n "$GEMINI_API_KEY" | wc -c
+          echo "First 6 characters:"
+          echo -n "$GEMINI_API_KEY" | cut -c1-6
+          echo ""
 
       - name: Run Rice Intelligence Engine
         env:
