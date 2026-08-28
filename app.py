@@ -16,59 +16,23 @@ from google.genai import types
 # The old version asked Gemini to find FX / rice FOB prices via web
 # search. Grounded search is *better than guessing* but it is still
 # an LLM reading pages and summarizing -- it can misread a table or
-# grab a stale mirror of the page.
-#
+ฃ#
 # The Thai Rice Exporters Association (TREA) publishes an actual
 # official weekly table -- FOB prices per grade AND the FX rate,
 # sourced from the Bank of Thailand -- on a plain HTML page, free,
-# no login: http://www.thairiceexporters.or.th/price.htm
-#
+# no login: http://www.thairiceexporters.or.th/price.#
 # So for FX and the grades that appear on that page, this version
-# scrapes the real number directly. No AI involved for those cells
-# at all -- there is nothing to be "more accurate" than the primary
-# source itself.
+ฃ# source itself.
 #
-# HONEST LIMITS (please read before treating this as fully solved):
-# 1. That page updates WEEKLY, not daily. Confirmed != real-time.
-# 2. Only 4 of your 9 grades appear on the public page (Hom Mali,
-#    White 5%, Glutinous, A.1 Super broken). The other 5 (Organic,
-#    Pathumthani, aged Hom Mali, aged/new broken Hom Mali) are behind
-#    TREA's member login, or not tabulated by TREA at all -- for
-#    those, this script still falls back to a Gemini grounded
-#    estimate, and marks it "AI Estimate (unconfirmed)" in the sheet
-#    so nobody mistakes it for a verified number.
-# 3. Freight rate and Brent oil still have no free, no-key official
-#    feed wired up here. Oil could be added via a free-tier key from
-#    EIA.gov or a similar provider if you want that hardened too --
-#    ask and I'll wire it in once you have a key.
-# 4. TREA's page has no stable HTML classes/ids (it's an old-style
-#    government/association site), so this scraper matches rows by
-#    their visible label text rather than position. That's more
-#    robust to layout tweaks, but if TREA renames a grade label
-#    outright, the match will silently return None -- the code below
-#    treats a None match as "not confirmed" rather than crashing, and
-#    logs it so you notice.
-# ===========================================================
-
-TREA_URL = "http://www.thairiceexporters.or.th/price.htm"
-
+# # HONEST LIMITS (please read before treating this as fully solved)# 1. That page updates WEEKLY, not daily. Confirmed != real-time.# 2. Only 4 of your 9 grades appear on the public page (Hom Mali,#    White 5%, Glutinous, A.1 Super broken). The#    feed wired up here. Oil could be added via a free-tier key from#    ask and I'll wire it in once you h# 4. TREA's page has no stable HTML classes/ids (it's an old-style
+#    government/association site), so this scraper matches rows TREA_URL = "http://www.thairiceexporters.or.th/price.htm"
 # Map: your internal 9 grades -> the label text TREA uses for the
 # grades that ARE on the public page. Only add a mapping here once
-# you've visually confirmed the label wording still matches the site.
-TREA_GRADE_KEYWORDS = {
-    "ข้าวหอมมะลิ (105/กข15)": ["Thai Hom Mali Rice - Premium (2025/26)"],
+# you've visually confirmed the label wording still matches the s   s"ข้าวหอมมะลิ (105/กข15)": ["Thai Hom Mali Rice - Premium (2025/26)"],
     "ข้าวขาว 5%": ["White Rice 5%"],
     "ข้าวเหนียว": ["White Glutinous Rice 10%"],
-    "ปลายปลาทู (A1 Extra)": ["White Broken Rice A.1 Super"],
-}
-
-ALL_GRADES = [
-    "ข้าวหอมมะลิ (105/กข15)",
-    "ข้าวออร์แกนิก (Organic - EU/US)",
-    "ข้าวปทุมธานี",
-    "ข้าวขาว 5%",
-    "ข้าวหอม (เก่า) [Premium Margin]",
-    "ข้าวเหนียว",
+    "ปลายป [Premium Margin]",
+    "ข้าวเหนียว",ข้าวเหนียว",
     "ปลายหอม (ใหม่)",
     "ปลายหอมเก่า (ตลาดแปรรูป)",
     "ปลายปลาทู (A1 Extra)",
@@ -88,9 +52,7 @@ def extract_latest_value(soup, keywords):
     """Find the row whose visible label contains one of `keywords`,
     return the right-most numeric column (= most recent week)."""
     for row in soup.find_all('tr'):
-        cells = row.find_all(['td', 'th'])
-        if not cells:
-            continue
+        cells = row.find_all(['h
         label = cells[0].get_text(strip=True)
         if any(kw in label for kw in keywords):
             numeric_cells = [c.get_text(strip=True) for c in cells[1:]]
