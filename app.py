@@ -10,49 +10,39 @@ from oauth2client.service_account import ServiceAccountCredentials
 from google import genai
 from google.genai import types
 
-# ===========================================================
-# WHAT CHANGED FROM v1, AND WHY
-# ===========================================================
-# The old version asked Gemini to find FX / rice FOB prices via web
-# search. Grounded search is *better than guessing* but it is still
-# an LLM reading pages and summarizing -- it can misread a table or
-ฃ#
-# The Thai Rice Exporters Association (TREA) publishes an actual
-# official weekly table -- FOB prices per grade AND the FX rate,
-# sourced from the Bank of Thailand -- on a plain HTML page, free,
-# no login: http://www.thairiceexporters.or.th/price.#
-# So for FX and the grades that appear on that page, this version
-ฃ# source itself.
-#
-# # HONEST LIMITS (please read before treating this as fully solved)# 1. That page updates WEEKLY, not daily. Confirmed != real-time.# 2. Only 4 of your 9 grades appear on the public page (Hom Mali,#    White 5%, Glutinous, A.1 Super broken). The#    feed wired up here. Oil could be added via a free-tier key from#    ask and I'll wire it in once you h# 4. TREA's page has no stable HTML classes/ids (it's an old-style
-#    government/association site), so this scraper matches rows TREA_URL = "http://www.thairiceexporters.or.th/price.htm"
-# Map: your internal 9 grades -> the label text TREA uses for the
-# grades that ARE on the public page. Only add a mapping here once
-# you've visually confirmed the label wording still matches the s   s"ข้าวหอมมะลิ (105/กข15)": ["Thai Hom Mali Rice - Premium (2025/26)"],
+TREA_URL = "http://www.thairiceexporters.or.th/price.htm"
+
+TREA_GRADE_KEYWORDS = {
+    "ข้าวหอมมะลิ (105/กข15)": ["Thai Hom Mali Rice - Premium (2025/26)"],
     "ข้าวขาว 5%": ["White Rice 5%"],
     "ข้าวเหนียว": ["White Glutinous Rice 10%"],
-    "ปลายป [Premium Margin]",
-    "ข้าวเหนียว",ข้าวเหนียว",
+    "ปลายปลาทู (A1 Extra)": ["White Broken Rice A.1 Super"],
+}
+
+ALL_GRADES = [
+    "ข้าวหอมมะลิ (105/กข15)",
+    "ข้าวออร์แกนิก (Organic - EU/US)",
+    "ข้าวปทุมธานี",
+    "ข้าวขาว 5%",
+    "ข้าวหอม (เก่า) [Premium Margin]",
+    "ข้าวเหนียว",
     "ปลายหอม (ใหม่)",
     "ปลายหอมเก่า (ตลาดแปรรูป)",
     "ปลายปลาทู (A1 Extra)",
 ]
 
 
-# ---------------------------------------------------------
-# 1. Scrape TREA official page for FX + confirmed grade prices
-# ---------------------------------------------------------
 def fetch_trea_soup():
     resp = requests.get(TREA_URL, timeout=20)
-    resp.encoding = 'tis-620'  # this site is not UTF-8
+    resp.encoding = 'tis-620'
     return BeautifulSoup(resp.text, 'html.parser')
 
 
 def extract_latest_value(soup, keywords):
-    """Find the row whose visible label contains one of `keywords`,
-    return the right-most numeric column (= most recent week)."""
     for row in soup.find_all('tr'):
-        cells = row.find_all(['h
+        cells = row.find_all(['td', 'th'])
+        if not cells:
+            continue
         label = cells[0].get_text(strip=True)
         if any(kw in label for kw in keywords):
             numeric_cells = [c.get_text(strip=True) for c in cells[1:]]
@@ -79,9 +69,6 @@ def get_trea_data():
     return data
 
 
-# ---------------------------------------------------------
-# 2. Google Sheets Authorization & Setup (with retry)
-# ---------------------------------------------------------
 scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 client = gspread.authorize(creds)
@@ -98,20 +85,9 @@ for attempt in range(3):
         print(f"Google Sheets API unavailable. Retrying in 5s... ({attempt+1}/3)")
         time.sleep(5)
 
-# ---------------------------------------------------------
-# 3. Gemini client + retry wrapper (used ONLY for narrative + the
-#    5 grades TREA doesn't publish -- never for FX or the 4 confirmed
-#    grades)
-# ---------------------------------------------------------
 ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 search_tool = types.Tool(google_search=types.GoogleSearch())
 
-
-# Minimum gap enforced BEFORE every call, regardless of success/failure.
-# This is preventive -- it spaces out the 6-7 calls this script makes per
-# run so we don't burst past a per-minute rate limit in the first place.
-# Tune this up if you're still seeing 429s after adding it (e.g. 20-30s
-# on a very restrictive free-tier key).
 MIN_SECONDS_BETWEEN_CALLS = 12
 _last_call_time = [0.0]
 
@@ -123,8 +99,6 @@ def call_gemini(prompt, model='gemini-3.6-flash', use_search=True, temperature=0
 
     last_err = None
     for attempt in range(max_retries):
-        # Preventive spacing: always wait out the minimum gap since the
-        # last call landed, success or failure, before trying again.
         elapsed = time.time() - _last_call_time[0]
         if elapsed < MIN_SECONDS_BETWEEN_CALLS:
             time.sleep(MIN_SECONDS_BETWEEN_CALLS - elapsed)
@@ -142,12 +116,6 @@ def call_gemini(prompt, model='gemini-3.6-flash', use_search=True, temperature=0
             err_text = str(e)
 
             if "429" in err_text or "RESOURCE_EXHAUSTED" in err_text:
-                # Rate/quota limit -- back off hard and increasing, since a
-                # quick retry will almost certainly hit the same wall.
-                # If this is a full DAILY quota (not just per-minute), no
-                # amount of backoff here will fix it -- it'll keep failing
-                # every attempt, and the real fix is enabling billing or
-                # waiting for the daily reset.
                 backoff = 20 * (attempt + 1)
                 print(f"Gemini rate/quota limit hit (attempt {attempt+1}/{max_retries}). "
                       f"Waiting {backoff}s before retry. Detail: {err_text[:200]}")
@@ -163,10 +131,8 @@ today_str = datetime.datetime.now().strftime("%d/%m/%Y")
 
 trea = get_trea_data()
 confirmed_fx = trea["fx_selling"]
-confirmed_grades = trea["grades"]  # grade_name -> price string or None
+confirmed_grades = trea["grades"]
 
-# Fallback: only ask Gemini to *guess* FX if TREA scrape truly failed.
-# This keeps a confirmed number in front of estimated ones at every step.
 if confirmed_fx:
     current_fx = confirmed_fx
     fx_source_label = "Confirmed (TREA, sourced from Bank of Thailand)"
@@ -179,13 +145,6 @@ else:
 
 print(f"FX: {current_fx} [{fx_source_label}]")
 
-# ---------------------------------------------------------
-# 4. Global research, split by topic -- each grounded call digs into
-#    ONE domain instead of one call trying to cover everything at
-#    once (which in practice means it searches each topic shallowly).
-#    Every sub-call is asked for short, factual bullet findings, not
-#    prose -- that's what gets combined in the synthesis step below.
-# ---------------------------------------------------------
 RESEARCH_TOPICS = {
     "oil_and_freight": f"""
 วันนี้ {today_str}. ใช้ Google Search หาข้อมูลล่าสุด (เช็คว่าไม่ใช่ข่าวเก่าที่พ้นสมัย) เกี่ยวกับ:
@@ -219,13 +178,6 @@ for topic_key, topic_prompt in RESEARCH_TOPICS.items():
     research_findings[topic_key] = resp.text.strip() if hasattr(resp, 'text') else "(no data returned)"
     print(f"--- {topic_key} ---\n{research_findings[topic_key]}\n")
 
-# ---------------------------------------------------------
-# 5. Synthesis call -- NO web search here. This step only reasons
-#    over what was already found above plus the TREA-confirmed
-#    numbers, so the executive summary can't quietly introduce a
-#    number that wasn't actually grounded in one of the research
-#    calls.
-# ---------------------------------------------------------
 synthesis_prompt = f"""
 คุณคือ Chief Agricultural Economist & Strategic Supply Chain Director ประจำอุตสาหกรรมข้าวไทยระดับสถาบัน
 วันนี้คือ {today_str} (ปี {current_year})
@@ -252,10 +204,6 @@ synthesis_prompt = f"""
 """
 macro_response = call_gemini(synthesis_prompt, use_search=False, temperature=0.2)
 
-# ---------------------------------------------------------
-# 5. Grade table: use TREA numbers where confirmed, AI estimate
-#    (clearly labeled) for the rest
-# ---------------------------------------------------------
 unconfirmed_grades = [g for g in ALL_GRADES if g not in confirmed_grades or confirmed_grades[g] is None]
 
 grade_prompt = f"""
@@ -270,10 +218,6 @@ grade_name, market_status ("Tight"/"Balanced"/"Surplus"), fob_forecast, strategy
 """
 grid_response = call_gemini(grade_prompt, use_search=True, temperature=0.1)
 
-# ---------------------------------------------------------
-# 6. Assemble final table: confirmed rows first, then AI-estimated
-#    rows, each tagged so nobody confuses one for the other
-# ---------------------------------------------------------
 table_rows = []
 
 for grade_name, keywords in TREA_GRADE_KEYWORDS.items():
@@ -300,9 +244,6 @@ except Exception as e:
     print(f"Could not parse AI grade estimates: {e}")
     print(grid_response.text if hasattr(grid_response, 'text') else "(no text)")
 
-# ---------------------------------------------------------
-# 7. Write to sheet
-# ---------------------------------------------------------
 sheet.batch_clear(['A5', 'C5', 'E5', 'A8', 'A22:E30'])
 sheet.update('A5', [[f"{current_fx} ({fx_source_label})"]])
 if hasattr(macro_response, 'text') and macro_response.text:
