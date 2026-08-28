@@ -145,21 +145,54 @@ ai_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 search_tool = types.Tool(google_search=types.GoogleSearch())
 
 
-def call_gemini(prompt, model='gemini-3.6-flash', use_search=True, temperature=0.2, max_retries=3):
+# Minimum gap enforced BEFORE every call, regardless of success/failure.
+# This is preventive -- it spaces out the 6-7 calls this script makes per
+# run so we don't burst past a per-minute rate limit in the first place.
+# Tune this up if you're still seeing 429s after adding it (e.g. 20-30s
+# on a very restrictive free-tier key).
+MIN_SECONDS_BETWEEN_CALLS = 12
+_last_call_time = [0.0]
+
+
+def call_gemini(prompt, model='gemini-3.6-flash', use_search=True, temperature=0.2, max_retries=5):
     config_kwargs = {"temperature": temperature}
     if use_search:
         config_kwargs["tools"] = [search_tool]
+
     last_err = None
     for attempt in range(max_retries):
+        # Preventive spacing: always wait out the minimum gap since the
+        # last call landed, success or failure, before trying again.
+        elapsed = time.time() - _last_call_time[0]
+        if elapsed < MIN_SECONDS_BETWEEN_CALLS:
+            time.sleep(MIN_SECONDS_BETWEEN_CALLS - elapsed)
+
         try:
-            return ai_client.models.generate_content(
+            result = ai_client.models.generate_content(
                 model=model, contents=prompt,
                 config=types.GenerateContentConfig(**config_kwargs)
             )
+            _last_call_time[0] = time.time()
+            return result
         except Exception as e:
+            _last_call_time[0] = time.time()
             last_err = e
-            print(f"Gemini call failed ({attempt+1}/{max_retries}): {e}")
-            time.sleep(4)
+            err_text = str(e)
+
+            if "429" in err_text or "RESOURCE_EXHAUSTED" in err_text:
+                # Rate/quota limit -- back off hard and increasing, since a
+                # quick retry will almost certainly hit the same wall.
+                # If this is a full DAILY quota (not just per-minute), no
+                # amount of backoff here will fix it -- it'll keep failing
+                # every attempt, and the real fix is enabling billing or
+                # waiting for the daily reset.
+                backoff = 20 * (attempt + 1)
+                print(f"Gemini rate/quota limit hit (attempt {attempt+1}/{max_retries}). "
+                      f"Waiting {backoff}s before retry. Detail: {err_text[:200]}")
+                time.sleep(backoff)
+            else:
+                print(f"Gemini call failed ({attempt+1}/{max_retries}): {err_text[:200]}")
+                time.sleep(4)
     raise last_err
 
 
